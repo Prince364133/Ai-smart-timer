@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus Timer</title>
+    <style>
+        body {
+            font-family: , sans-serif;
+            text-align: center;
+            margin-top: 50px;
+            background-color: #f3f4f6;
+        }
+        #timer {
+            font-size: 3em;
+            margin: 20px;
+        }
+        #status {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+        }
+        .three-dots {
+            cursor: pointer;
+            font-size: 1.2em;
+            position: absolute;
+            top: 20px;
+            right: 20px;
+        }
+        .menu {
+            display: none;
+            position: absolute;
+            right: 20px;
+            top: 50px;
+            background: #fff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            padding: 10px;
+            z-index: 10;
+        }
+        .menu li {
+            list-style-type: none;
+            padding: 8px;
+            cursor: pointer;
+        }
+        #dashboard {
+            margin-top: 20px;
+            padding: 10px;
+        }
+        #watermark {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            opacity: 0.5;
+            font-size: 0.9em;
+        }
+        table {
+            width: 80%;
+            margin: 0 auto;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        table, th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: #e2e2e2;
+        }
+    </style>
+</head>
+<body>
+  
+    <h1>Focus Timer</h1>
+    <div class="three-dots">⋮</div>
+    <div id="timer">00:00:00.000</div>
+    <div id="status">Flip your phone to start the focus timer.</div>
+    <ul class="menu">
+        <li>Edit Alert Message</li>
+        <li>Monthly Report</li>
+    </ul>
+    
+    <div id="dashboard">
+        <h2>Daily Study Times</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>No. of disturb</th>
+                    <th>Date</th>
+                    <th>Total Time</th>
+                </tr>
+            </thead>
+            <tbody id="dailyData"></tbody>
+        </table>
+    </div>
+    <div id="watermark">BRDLAI2</div>
+
+    <script src="app.js"></script>
+  <script>let timerElement = document.getElementById('timer');
+let statusElement = document.getElementById('status');
+let dailyDataElement = document.getElementById('dailyData');
+let timer = 0;
+let interval = null;
+let isTimerRunning = false;
+let isPhoneFaceDown = false;
+let dailyStudyData = {};
+let today = new Date().toISOString().split('T')[0];
+let serialNumber = 1;
+let alertMessage = "Don't use phone, stay focused!"; // Default alert message
+
+// Speech Synthesis API for verbal alerts
+function speakAlert(message) {
+    const utterance = new SpeechSynthesisUtterance(message);
+    utterance.pitch = 1.0;
+    utterance.rate = 1.0;
+    speechSynthesis.speak(utterance);
+}
+
+// Update timer display with milliseconds
+function updateTimer() {
+    let milliseconds = timer % 1000;
+    let seconds = Math.floor((timer / 1000) % 60);
+    let minutes = Math.floor((timer / (1000 * 60)) % 60);
+    let hours = Math.floor((timer / (1000 * 60 * 60)) % 24);
+    timerElement.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
+    timer += 10; // Increment timer by 10 milliseconds
+}
+
+// Start the timer automatically when the phone is face down
+function startTimer() {
+    if (!isTimerRunning) {
+        interval = setInterval(updateTimer, 10); // Update every 10 milliseconds
+        isTimerRunning = true;
+        statusElement.textContent = "Timer is running... Stay focused!";
+    }
+}
+
+// Stop the timer and trigger alert when phone is picked up
+function stopTimer() {
+    if (isTimerRunning) {
+        clearInterval(interval);
+        isTimerRunning = false;
+        statusElement.textContent = "Timer stopped. You picked up the phone.";
+        speakAlert(alertMessage);
+        saveDailyStudyTime();  // Save the study time
+    }
+}
+
+// Save daily study time
+function saveDailyStudyTime() {
+    let timeSpentToday = Math.floor(timer / 1000); // Time in seconds
+    dailyStudyData[today] = timeSpentToday; // Save time for today
+    updateDashboard();
+}
+
+// Update dashboard with daily study data
+function updateDashboard() {
+    dailyDataElement.innerHTML = ''; // Clear existing data
+    for (const [date, time] of Object.entries(dailyStudyData)) {
+        let hours = Math.floor(time / 3600);
+        let minutes = Math.floor((time % 3600) / 60);
+        let seconds = time % 60;
+        dailyDataElement.innerHTML += `<tr><td>${serialNumber++}</td><td>${date}</td><td>${hours}h ${minutes}m ${seconds}s</td></tr>`;
+    }
+}
+
+// Monthly report reminder
+function generateMonthlyReport() {
+    let maxStudyTime = 0;
+    let bestDay = '';
+    for (const [date, time] of Object.entries(dailyStudyData)) {
+        if (time > maxStudyTime) {
+            maxStudyTime = time;
+            bestDay = date;
+        }
+    }
+    speakAlert(`You studied the most on ${bestDay}. Keep it up! Total time: ${Math.floor(maxStudyTime / 3600)}h ${Math.floor((maxStudyTime % 3600) / 60)}m ${maxStudyTime % 60}s`);
+}
+
+// Detect phone flip and screen orientation
+window.addEventListener('deviceorientation', function(event) {
+    if (event.beta > 150 || event.beta < -150) {
+        if (!isPhoneFaceDown) {
+            isPhoneFaceDown = true;
+            startTimer();
+        }
+    } else {
+        if (isPhoneFaceDown) {
+            isPhoneFaceDown = false;
+            stopTimer();
+        }
+    }
+});
+
+// Handle three-dot menu
+document.querySelector('.three-dots').addEventListener('click', () => {
+    document.querySelector('.menu').style.display = 'block';
+});
+
+// Handle menu options
+document.querySelectorAll('.menu li').forEach((item, index) => {
+    item.addEventListener('click', () => {
+        if (index === 0) {
+            editAlertMessage();
+        } else if (index === 1) {
+            generateMonthlyReport();
+        }
+        document.querySelector('.menu').style.display = 'none';
+    });
+});
+
+// Function to edit alert message
+function editAlertMessage() {
+    const newAlertMessage = prompt("Edit your alert message:", alertMessage);
+    if (newAlertMessage !== null) {
+        alertMessage = newAlertMessage;
+    }
+}
+
+// Background notification when the app is minimized
+document.addEventListener('visibilitychange', function() {
+    if (document.hidden && isPhoneFaceDown && isTimerRunning) {
+        if (Notification.permission === "granted") {
+            new Notification("Focus Timer is still running! Stay focused!");
+        }
+    }
+});
+
+// Request notification permission
+if (Notification.permission !== "granted") {
+    Notification.requestPermission();
+}
+
+// Automatically start functionality when the website loads
+window.onload = function() {
+    statusElement.textContent = "Flip your phone to start the focus timer.";
+};
+
+// Monthly reminder (runs at the end of the month)
+function monthlyReminder() {
+    let now = new Date();
+    let lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    if (now.getDate() === lastDay) {
+        generateMonthlyReport();
+    }
+}
+
+setInterval(monthlyReminder, 86400000); // Check every 24 hours
+  </script>
+  
+</body>
+</html>
